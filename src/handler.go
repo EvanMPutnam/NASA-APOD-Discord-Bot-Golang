@@ -1,6 +1,5 @@
 // TODO: Upload Lambda (CDK ???)
 // TODO: Hook up to API gateway (CDK ???)
-// TODO: Load environment variables instead of items here.
 package main
 
 import (
