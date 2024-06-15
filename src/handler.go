@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -23,7 +20,6 @@ var nasaApiKey = os.Getenv("NASA_API_KEY")
 
 var discordApiToken = os.Getenv("DISCORD_API_TOKEN")
 var discordApiChannel = os.Getenv("DISCORD_API_CHANNEL") // TODO: Pass this in the request.
-var discordPublicKey = os.Getenv("DISCORD_PUBLIC_KEY")
 
 type nasaResponse struct {
 	Copyright   string `json:"copyright"`
@@ -31,10 +27,6 @@ type nasaResponse struct {
 	Explanation string `json:"explanation"`
 	Title       string `json:"title"`
 	Hdurl       string `json:"hdurl"`
-}
-
-type discordRequest struct {
-	Type int64 `json:"type"`
 }
 
 func getNasaData() nasaResponse {
@@ -80,24 +72,6 @@ func sendNasaImageOfTheDay() {
 	log.Printf("Message ID: %s\n", msg.ID)
 }
 
-func validateSignature(event *events.APIGatewayProxyRequest) bool {
-	sig := event.Headers["x-signature-ed25519"]
-	timeStamp := event.Headers["x-signature-timestamp"]
-	body := event.Body
-	bodyBytes := []byte(timeStamp + body)
-	log.Println(sig, timeStamp, body)
-	sigBytes, err := hex.DecodeString(sig)
-	if err != nil {
-		return false
-	}
-	publicKey, err := hex.DecodeString(discordPublicKey)
-	if err != nil {
-		return false
-	}
-	trusted := ed25519.Verify(publicKey, bodyBytes, sigBytes)
-	return trusted
-}
-
 func loadEnvironment() {
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -106,43 +80,11 @@ func loadEnvironment() {
 	nasaApiKey = os.Getenv("NASA_API_KEY")
 	discordApiToken = os.Getenv("DISCORD_API_TOKEN")
 	discordApiChannel = os.Getenv("DISCORD_API_CHANNEL") // TODO: Pass this in the request.
-	discordPublicKey = os.Getenv("DISCORD_PUBLIC_KEY")
 }
 
-func HandleRequest(ctx context.Context, event *events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
-	log.Println(event)
-	if event == nil {
-		return nil, fmt.Errorf("received nil event")
-	}
-
-	if !validateSignature(event) {
-		return nil, fmt.Errorf("forbidden")
-	}
-
-	successMsg := "Successfully sent message to bot channel"
-
-	discordReq := &discordRequest{}
-	err := json.Unmarshal([]byte(event.Body), &discordReq)
-
-	if err != nil {
-		return nil, fmt.Errorf("no type present in request")
-	}
-
-	// Ping type for bot registration
-	if discordReq.Type == 1 {
-		return &events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Body:       `{ "type": 1 }`,
-		}, nil
-	} else {
-		sendNasaImageOfTheDay()
-	}
-
+func HandleRequest(ctx context.Context, event *events.EventBridgeEvent) error {
 	sendNasaImageOfTheDay()
-	return &events.APIGatewayProxyResponse{
-		StatusCode: 200,
-		Body:       successMsg,
-	}, nil
+	return nil
 }
 
 func main() {
